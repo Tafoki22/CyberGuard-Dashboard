@@ -1,0 +1,8 @@
+customtkinter
+sqlalchemy
+dnspython
+matplotlib
+apscheduler
+plyer
+reportlab
+requests

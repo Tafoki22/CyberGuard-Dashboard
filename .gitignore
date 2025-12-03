@@ -1,0 +1,17 @@
+# Ignore Virtual Environment
+venv/
+__pycache__/
+
+# Ignore Build Artifacts (Don't upload the massive exe folders)
+build/
+dist/
+*.spec
+
+# Ignore Local Database (Protect your login data)
+*.sqlite
+
+# Ignore Logs
+*.log
+
+# Ignore IDE settings
+.vscode/
