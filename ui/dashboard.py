@@ -37,13 +37,13 @@ class CyberGuardDashboard(ctk.CTk):
         self.current_user_email = None
         self.running = True 
         
-        # Temp Storage
+        # Temp Storage for Registration
         self.reg_temp_data = {}
         self.reg_otp_code = None
         self.reset_otp = None
         self.reset_email = None
         
-        # Initialize UI Variables to prevent AttributeErrors
+        # Initialize UI Variables (Prevents AttributeErrors)
         self.report_status = None
         self.scan_results_textbox = None
         self.metric_labels = {}
@@ -59,7 +59,7 @@ class CyberGuardDashboard(ctk.CTk):
         self.build_forgot_password_screen()
         self.build_main_app()
 
-        # Start Animation Thread
+        # Start Animation Thread (System Health)
         threading.Thread(target=self.animate_system_health, daemon=True).start()
 
         self.show_login()
@@ -93,12 +93,14 @@ class CyberGuardDashboard(ctk.CTk):
         box.place(relx=0.5, rely=0.5, anchor="center")
         ctk.CTkLabel(box, text="Create Account", font=("Roboto", 24, "bold")).pack(pady=(30, 20))
         
+        # Step 1 View
         self.reg_step1 = ctk.CTkFrame(box, fg_color="transparent"); self.reg_step1.pack(fill="both", expand=True)
         self.entry_reg_email = ctk.CTkEntry(self.reg_step1, placeholder_text="Business Email", width=300); self.entry_reg_email.pack(pady=10)
         self.entry_reg_org = ctk.CTkEntry(self.reg_step1, placeholder_text="Organization Name", width=300); self.entry_reg_org.pack(pady=10)
         self.entry_reg_pass = ctk.CTkEntry(self.reg_step1, placeholder_text="Strong Password", show="*", width=300); self.entry_reg_pass.pack(pady=10)
         ctk.CTkButton(self.reg_step1, text="Verify Email (Send OTP)", command=self.perform_reg_step1, width=300).pack(pady=20)
         
+        # Step 2 View (Hidden initially)
         self.reg_step2 = ctk.CTkFrame(box, fg_color="transparent") 
         ctk.CTkLabel(self.reg_step2, text="Enter Verification Code", font=("Arial", 14)).pack(pady=10)
         self.entry_reg_otp = ctk.CTkEntry(self.reg_step2, placeholder_text="6-Digit OTP", width=300); self.entry_reg_otp.pack(pady=10)
@@ -137,6 +139,7 @@ class CyberGuardDashboard(ctk.CTk):
         if not validate_email_format(email): self.lbl_reg_msg.configure(text="Invalid Email Format", text_color="red"); return
         if not validate_password_strength(pwd)[0]: self.lbl_reg_msg.configure(text="Weak Password", text_color="red"); return
         if not check_email_availability(email)[0]: self.lbl_reg_msg.configure(text="Email Taken", text_color="red"); return
+
         otp = generate_otp()
         if send_otp_email(email, otp)[0]:
             self.reg_temp_data = {"email": email, "pass": pwd, "org": org}; self.reg_otp_code = otp
@@ -155,7 +158,7 @@ class CyberGuardDashboard(ctk.CTk):
 
     def send_reset_otp(self):
         email = self.entry_reset_email.get().strip()
-        if not check_email_availability(email)[0]: 
+        if not check_email_availability(email)[0]: # False means email taken
             otp = generate_otp()
             if send_otp_email(email, otp)[0]:
                 self.reset_otp = otp; self.reset_email = email
@@ -193,6 +196,7 @@ class CyberGuardDashboard(ctk.CTk):
         ctk.CTkLabel(head, text="🇳🇬 National Threat Analytics", font=("Roboto", 20, "bold")).pack(side="left")
         ctk.CTkButton(head, text="🔄 Refresh Data", width=100, command=self.refresh_dashboard_data).pack(side="right")
         self.metrics_frame = ctk.CTkFrame(dash); self.metrics_frame.pack(pady=10, padx=20, fill="x")
+        self.metric_labels = {}
         self.create_metric_card(self.metrics_frame, "Security Score", "...", "gray", 0)
         self.create_metric_card(self.metrics_frame, "System Status", "...", "gray", 1)
         self.create_metric_card(self.metrics_frame, "Threats Blocked", "...", "gray", 2)
@@ -549,14 +553,10 @@ class CyberGuardDashboard(ctk.CTk):
             ctk.CTkButton(tbl, text=item['status'], fg_color=item['color'], width=90, height=22, state="disabled").grid(row=r, column=3, padx=20, pady=2, sticky="w")
 
     def generate_report(self):
-        from tkinter import messagebox
-        try:
-            f, _ = generate_compliance_report()
-            messagebox.showinfo("Report", f"Saved to: {f}")
-            os.system(f"start {f}")
-            self.log_system_event(f"Report generated: {f}")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
+        f, _ = generate_compliance_report()
+        if self.report_status: self.report_status.configure(text=f"Saved: {f}", text_color="green")
+        os.system(f"start {f}")
+        self.log_system_event(f"Report generated: {f}")
 
     def wipe_data(self):
         clear_all_data()

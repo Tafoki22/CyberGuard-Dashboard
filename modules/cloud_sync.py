@@ -4,7 +4,7 @@ import threading
 
 # The address of your local "Cloud" server
 # Ensure this matches the address shown in your Cloud Terminal (usually port 8000)
-CLOUD_URL = "http://127.0.0.1:8000/api/v1/sync/scan"
+CLOUD_URL = "https://cyberguard-backend-uzv8.onrender.com/api/v1/sync/scan"
 
 def sync_scan_to_cloud(api_key, device_name, ip, threat_level, details):
     """

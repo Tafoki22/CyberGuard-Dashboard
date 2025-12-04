@@ -1,15 +1,30 @@
 # modules/scanner.py
-import os
 import socket
 import threading
+import os
 from database.models import ScanResult
 from database.db_session import create_session
 from modules.cloud_sync import sync_scan_to_cloud
 
-# --- 1. OFFLINE CVE DATABASE (The "What") ---
+# --- CONFIGURATION LOADER ---
+def load_api_key():
+    """
+    Reads the API Key from a local 'license.key' file.
+    This allows one .exe to work for multiple different clients.
+    """
+    key_file = "license.key"
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "r") as f:
+                return f.read().strip()
+        except:
+            return None
+    return None
+
+# --- OFFLINE CVE DATABASE ---
 CVE_DATABASE = {
-    445: "CVE-2017-0144 (EternalBlue) - Critical Ransomware Risk",
-    3389: "CVE-2019-0708 (BlueKeep) - Remote Desktop Exploit",
+    445: "CVE-2017-0144 (EternalBlue) - Critical Ransomware Risk (WannaCry)",
+    3389: "CVE-2019-0708 (BlueKeep) - Remote Desktop Code Execution",
     8080: "Misconfigured Web Proxy - High Risk for ISP Routers",
     23: "Cleartext Telnet - Credential Theft Risk",
     21: "FTP Anonymous Login - Data Leakage Risk",
@@ -17,19 +32,7 @@ CVE_DATABASE = {
     5555: "ADB Interface Exposed - Android Device Risk"
 }
 
-# --- 2. MITIGATION DATABASE (The "How") ---
-# Professional remediation steps for a Cyber Security Student
-MITIGATION_DB = {
-    445: "ACTION: Disable SMBv1 immediately. Run PowerShell: 'Set-SmbServerConfiguration -EnableSMB1Protocol $false'. Ensure Patch MS17-010 is installed.",
-    3389: "ACTION: Disable RDP if not in use. If required, use a VPN gateway, enforce NLA (Network Level Authentication), and change default port.",
-    8080: "ACTION: Check Router Administration page. Disable 'Remote Management' and change default Admin/Admin credentials immediately.",
-    23: "ACTION: Kill Telnet service. Switch to SSH (Port 22) which uses encryption. Telnet transmits passwords in plain text.",
-    21: "ACTION: Disable Anonymous Authentication in your FTP server config. Enforce FTPS (SSL/TLS).",
-    135: "ACTION: Block TCP 135 at the firewall level. This RPC port is a common target for lateral movement.",
-    5555: "ACTION: Turn off 'USB Debugging' on the Android device connected to this network.",
-    "DEFAULT": "ACTION: If this service is not required for business operations, stop the service and close the port via Windows Firewall."
-}
-
+# --- NIGERIAN INFRASTRUCTURE SIGNATURES ---
 POS_PORTS = [8580, 8080, 8000, 2000] 
 
 COMMON_PORTS = {
@@ -71,36 +74,25 @@ def scan_port(ip, port, results_list):
             service = COMMON_PORTS.get(port, "Unknown")
             banner = grab_banner(ip, port)
             
-            # Risk Logic
             risk = "🟢 Low"
             details = "Standard Service"
-            mitigation = MITIGATION_DB.get("DEFAULT") # Default advice
-
+            
             if port in CVE_DATABASE:
                 risk = "🔴 High"
                 details = f"ALERT: {CVE_DATABASE[port]}"
-                mitigation = MITIGATION_DB.get(port, mitigation)
-            
             elif port in POS_PORTS:
                 risk = "🟡 Medium"
-                details = "Potential POS System"
-                mitigation = "ACTION: Ensure this POS terminal is on a segmented VLAN separate from guest Wi-Fi."
-            
+                details = "Potential POS System or Payment Terminal"
             elif port in [22, 23, 3389]:
                 risk = "🔴 High"
                 details = "Remote Access Service Exposed"
-                mitigation = MITIGATION_DB.get(port, mitigation)
-
-            # Store result object with mitigation advice embedded in 'version' for MVP simplicity
-            # Or we can append it to details
-            full_details = f"{details}\n    🛡️ {mitigation}"
 
             scan_res = ScanResult(
                 target_ip=ip,
                 port_id=port,
                 protocol='TCP',
                 service_name=service,
-                version=full_details, # Storing mitigation here for display
+                version=banner if banner else details, 
                 state="Open",
                 risk_level=risk
             )
@@ -110,9 +102,6 @@ def scan_port(ip, port, results_list):
         pass
 
 def run_network_scan():
-    """
-    Orchestrates the scan and syncs critical threats to the Cloud.
-    """
     print("Starting Cloud-Connected Network Scan...")
     
     local_ip = get_local_ip()
@@ -123,7 +112,6 @@ def run_network_scan():
     found_results = []
     threads = []
     
-    # Threading for performance
     for ip in target_ips:
         for port in COMMON_PORTS.keys():
             t = threading.Thread(target=scan_port, args=(ip, port, found_results))
@@ -149,25 +137,21 @@ def run_network_scan():
     session.commit()
     session.close()
 
-    # --- ☁️ CLOUD SYNC LOGIC ---
-    # REPLACE THIS with the API Key you found in pgAdmin!
-   # ✅ CORRECT
-    API_KEY = ("CYBERGUARD_API_KEY", "PLACEHOLDER_KEY_FOR_GITHUB")
-
+    # --- DYNAMIC CLOUD SYNC ---
+    API_KEY = load_api_key()
     
-    if found_results:
-        print(f"--- Analysis Complete. Checking for Cloud Sync candidates... ---")
-
-    for res in found_results:
-        # Only send High/Critical risks to the cloud
-        if "High" in str(res.risk_level):
-            print(f"🚀 Syncing Critical Threat to Cloud: {res.target_ip}")
-            sync_scan_to_cloud(
-                api_key=API_KEY,
-                device_name=f"Desktop-Client-{local_ip}",
-                ip=res.target_ip,
-                threat_level="CRITICAL",
-                details=f"Port {res.port_id} Open ({res.service_name}) - {res.version}"
-            )
+    if API_KEY:
+        print(f"🔑 License Found: {API_KEY[:5]}... Syncing Data.")
+        for res in found_results:
+            if "High" in str(res.risk_level):
+                sync_scan_to_cloud(
+                    api_key=API_KEY,
+                    device_name=f"Desktop-{local_ip}",
+                    ip=res.target_ip,
+                    threat_level="CRITICAL",
+                    details=f"Port {res.port_id} Open ({res.service_name})"
+                )
+    else:
+        print("⚠️ No License Key Found. Skipping Cloud Sync.")
 
     return found_results
